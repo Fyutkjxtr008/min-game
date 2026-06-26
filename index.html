@@ -232,13 +232,32 @@
     <script type="importmap">
         {
             "imports": {
-                "three": "https://unpkg.com/three@0.128.0/build/three.module.js"
+                "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/"
             }
         }
     </script>
 
     <script type="module">
         import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+        const modelLoader = new GLTFLoader();
+        const modelCache = {};
+        const loadingModels = {};
+
+        function loadCharacterModel(id, callback) {
+            if (loadingModels[id]) return;
+            loadingModels[id] = true;
+            const filename = id === 'steve_gltf' ? 'steve' : id;
+            modelLoader.load(`models/${filename}.gltf`, (gltf) => {
+                modelCache[id] = gltf.scene;
+                if (callback) callback();
+            }, undefined, () => {
+                loadingModels[id] = false;
+                if (callback) callback();
+            });
+        }
 
         window.onerror = (msg, src, line) => {
             const div = document.createElement('div');
@@ -286,7 +305,6 @@
             ctx.fill();
         }
 
-        // Generate seeded dot positions for scrolling terrain
         const grassDots = [];
         for (let i = 0; i < 80; i++) {
             grassDots.push({ x: Math.floor(Math.random() * 1024 / 8) * 8, y: 330 + Math.floor(Math.random() * 14 / 4) * 4 });
@@ -306,7 +324,6 @@
             const W = 1024, H = 512;
             ctx.clearRect(0, 0, W, H);
 
-            // Sky gradient (static)
             const g = ctx.createLinearGradient(0, 0, 0, H);
             g.addColorStop(0, '#4a90d9');
             g.addColorStop(0.4, '#6ab0f0');
@@ -316,7 +333,6 @@
             ctx.fillStyle = g;
             ctx.fillRect(0, 0, W, H);
 
-            // Clouds (slow parallax 0.05x)
             const clouds = [[80,60,140,30],[350,40,180,35],[600,70,120,25],[820,45,160,30],[200,100,100,20],[700,95,130,28]];
             const coff = off * 0.05;
             for (const [cx, cy, cw, ch] of clouds) {
@@ -325,7 +341,6 @@
                 if (sx + cw > W) drawCloud(sx - W, cy, cw, ch);
             }
 
-            // Mountains (parallax 0.15x)
             const moff = off * 0.15;
             ctx.save();
             ctx.translate(-moff % W, 0);
@@ -337,7 +352,6 @@
             }
             ctx.restore();
 
-            // Distant hills (parallax 0.2x)
             const hoff = off * 0.2;
             ctx.save();
             ctx.translate(-hoff % W, 0);
@@ -354,7 +368,6 @@
             ctx.fill();
             ctx.restore();
 
-            // Terrain layers (static full-width fills)
             const layers = [
                 { y: 330, h: 18, color: '#5a8a3c' },
                 { y: 348, h: 30, color: '#8b6b3c' },
@@ -368,7 +381,6 @@
                 ctx.fillRect(0, l.y, W, l.h);
             }
 
-            // Texture dots with parallax (0.4x)
             const doff = off * 0.4;
             ctx.fillStyle = '#4a7a2c';
             for (const d of grassDots) {
@@ -421,7 +433,6 @@
         scene.add(fillLight);
         scene.add(new THREE.AmbientLight(0x446688, 0.3));
 
-        // Ground (grass block path)
         const groundMat = new THREE.MeshStandardMaterial({ color: 0x5a8a3c, roughness: 0.8 });
         const ground = new THREE.Mesh(
             new THREE.PlaneGeometry(16, 100),
@@ -432,7 +443,6 @@
         ground.receiveShadow = true;
         scene.add(ground);
 
-        // Dirt path (the running lane)
         const dirtMat = new THREE.MeshStandardMaterial({ color: 0x8b6b3c, roughness: 0.9 });
         const dirtPath = new THREE.Mesh(
             new THREE.PlaneGeometry(5, 100),
@@ -443,12 +453,10 @@
         dirtPath.receiveShadow = true;
         scene.add(dirtPath);
 
-        // === MINECRAFT DECORATIONS ===
         function makeMat(color, opts = {}) {
             return new THREE.MeshStandardMaterial({ color, roughness: opts.roughness || 0.8, ...opts });
         }
 
-        // Blocky tree
         function makeTree(x, z) {
             const g = new THREE.Group();
             const trunkH = 1.2 + Math.random() * 0.4;
@@ -474,15 +482,12 @@
             return g;
         }
 
-        // Blocky house (Minecraft-style)
         function makeHouse(x, z) {
             const g = new THREE.Group();
-            // Cobblestone foundation (×3)
             const found = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.36, 3.0), makeMat(0x777777));
             found.position.y = -0.39;
             g.add(found);
 
-            // Oak planks walls — build from horizontal strips
             const wallH = 1.5;
             const wallW = 3.0;
             const wallD = 2.4;
@@ -495,7 +500,6 @@
                 g.add(strip);
             }
 
-            // Corner log pillars (oak log)
             const logMat = makeMat(0x6b4a1a);
             for (const [lx, lz] of [[-wallW/2, -wallD/2], [wallW/2, -wallD/2], [-wallW/2, wallD/2], [wallW/2, wallD/2]]) {
                 const p = new THREE.Mesh(new THREE.BoxGeometry(0.15, wallH, 0.15), logMat);
@@ -503,7 +507,6 @@
                 g.add(p);
             }
 
-            // Windows (glass panes) ×3
             const glassMat = makeMat(0x88ccff, { transparent: true, opacity: 0.5 });
             const winL = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.45, 0.02), glassMat);
             winL.position.set(-0.75, 0.0, wallD / 2 + 0.01);
@@ -512,13 +515,11 @@
             winR.position.set(0.75, 0.0, wallD / 2 + 0.01);
             g.add(winR);
 
-            // Door (dark oak) ×3
             const doorMat = makeMat(0x4a2a1a);
             const door = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.84, 0.04), doorMat);
             door.position.set(1.5, -0.15, 0);
             g.add(door);
 
-            // Oak stairs roof (2 layers) ×3
             const stairMat = makeMat(0x8b5a2a);
             const roof1 = new THREE.Mesh(new THREE.BoxGeometry(wallW + 0.45, 0.36, wallD + 0.45), stairMat);
             roof1.position.y = wallH - 0.27;
@@ -529,7 +530,6 @@
             roof2.castShadow = true;
             g.add(roof2);
 
-            // Chimney (cobblestone) ×3
             const chim = new THREE.Mesh(new THREE.BoxGeometry(0.54, 1.2, 0.54), makeMat(0x777777));
             chim.position.set(-0.9, wallH + 0.05, 0.9);
             g.add(chim);
@@ -541,7 +541,6 @@
             return g;
         }
 
-        // Blocky torch
         function makeTorch(px, pz) {
             const g = new THREE.Group();
             const stick = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.3, 0.04), makeMat(0x5a3a1a));
@@ -554,7 +553,6 @@
             return g;
         }
 
-        // Dynamic decorations (scroll with the world)
         const decorations = [];
 
         function spawnDecoration() {
@@ -573,7 +571,6 @@
             scene.add(mesh);
             decorations.push({ mesh, z: zPos });
 
-            // Sometimes place on other side too
             if (Math.random() < 0.45) {
                 const xOff2 = 4.0 + Math.random() * 1.5;
                 let mesh2;
@@ -587,7 +584,6 @@
             }
         }
 
-        // Pre-populate decorations along the track
         for (let z = -24; z < 24; z += 3 + Math.random() * 2) {
             const side = Math.random() > 0.5 ? 1 : -1;
             const xOff = 4.0 + Math.random() * 1.5;
@@ -617,7 +613,6 @@
             }
         }
 
-        // Rail tracks on the path (3 lanes)
         function makeRailSegment(z) {
             const g = new THREE.Group();
             const railMat = makeMat(0x888888);
@@ -630,7 +625,6 @@
                 r2.position.set(laneX + 0.5, -0.42, z);
                 g.add(r2);
             }
-            // Ties under each rail pair
             const tieMat = makeMat(0x5a3a1a);
             for (let tz = -0.3; tz <= 0.3; tz += 0.2) {
                 for (const laneX of lanePositions) {
@@ -650,7 +644,6 @@
         playerGroup.castShadow = true;
         scene.add(playerGroup);
 
-        // ===== MINECRAFT STEVE CHARACTER (точь-в-точь) =====
         function buildSteve(g) {
             const skinM = new THREE.MeshStandardMaterial({ color: 0xd4a56a, roughness: 0.7 });
             const shirtM = new THREE.MeshStandardMaterial({ color: 0x3399cc, roughness: 0.7 });
@@ -659,13 +652,11 @@
             const eyeM = new THREE.MeshStandardMaterial({ color: 0x222244, roughness: 0.3 });
             const shoeM = new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 0.8 });
 
-            // Head (8×8×8 pixels = 1 block)
             const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), skinM);
             head.position.set(0, 1.35, 0);
             head.castShadow = true;
             g.add(head);
 
-            // Hair (top of head + bangs)
             const hair = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.08, 0.42), hairM);
             hair.position.set(0, 1.55, 0);
             g.add(hair);
@@ -673,7 +664,6 @@
             bangs.position.set(0, 1.52, 0.18);
             g.add(bangs);
 
-            // Eyes
             const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.02), eyeM);
             eyeL.position.set(-0.08, 1.37, 0.22);
             g.add(eyeL);
@@ -681,7 +671,6 @@
             eyeR.position.set(0.08, 1.37, 0.22);
             g.add(eyeR);
 
-            // Iris (lighter inner)
             const irisM = new THREE.MeshStandardMaterial({ color: 0x4488cc });
             const irisL = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.02), irisM);
             irisL.position.set(-0.08, 1.37, 0.225);
@@ -690,41 +679,34 @@
             irisR.position.set(0.08, 1.37, 0.225);
             g.add(irisR);
 
-            // Nose
             const nose = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.04, 0.06), new THREE.MeshStandardMaterial({ color: 0xbc8a5a }));
             nose.position.set(0, 1.33, 0.24);
             g.add(nose);
 
-            // Mouth
             const mouthM = new THREE.MeshStandardMaterial({ color: 0x5a3a2a });
             const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.02, 0.02), mouthM);
             mouth.position.set(0, 1.27, 0.22);
             g.add(mouth);
 
-            // Body / torso (cyan shirt)
             const body = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.48, 0.22), shirtM);
             body.position.set(0, 0.92, 0);
             body.castShadow = true;
             g.add(body);
 
-            // Belt (dark blue strip)
             const belt = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.04, 0.24), new THREE.MeshStandardMaterial({ color: 0x1a1a4a }));
             belt.position.set(0, 0.68, 0);
             g.add(belt);
 
-            // Left arm
             leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.46, 0.16), shirtM);
             leftArm.position.set(-0.3, 0.92, 0);
             leftArm.castShadow = true;
             g.add(leftArm);
 
-            // Right arm
             rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.46, 0.16), shirtM);
             rightArm.position.set(0.3, 0.92, 0);
             rightArm.castShadow = true;
             g.add(rightArm);
 
-            // Hands (skin)
             const lHand = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.1, 0.14), skinM);
             lHand.position.set(-0.3, 0.69, 0);
             g.add(lHand);
@@ -732,19 +714,16 @@
             rHand.position.set(0.3, 0.69, 0);
             g.add(rHand);
 
-            // Left leg
             leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.44, 0.18), pantsM);
             leftLeg.position.set(-0.1, 0.34, 0);
             leftLeg.castShadow = true;
             g.add(leftLeg);
 
-            // Right leg
             rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.44, 0.18), pantsM);
             rightLeg.position.set(0.1, 0.34, 0);
             rightLeg.castShadow = true;
             g.add(rightLeg);
 
-            // Shoes
             const lShoe = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.08, 0.24), shoeM);
             lShoe.position.set(-0.1, 0.1, 0.02);
             g.add(lShoe);
@@ -761,26 +740,21 @@
             const eyeM = new THREE.MeshStandardMaterial({ color: 0x44aa44, roughness: 0.3 });
             const shoeM = new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 0.8 });
 
-            // Head
             const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), skinM);
             head.position.set(0, 1.35, 0);
             head.castShadow = true;
             g.add(head);
 
-            // Hair (ginger/red, Alex's bob cut with side part)
             const hair = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.08, 0.42), hairM);
             hair.position.set(0, 1.55, 0);
             g.add(hair);
-            // Side ponytail (right side)
             const pony = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.1), hairM);
             pony.position.set(0.24, 1.48, 0);
             g.add(pony);
-            // Front bangs
             const bangs = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.06, 0.1), hairM);
             bangs.position.set(0, 1.52, 0.18);
             g.add(bangs);
 
-            // Eyes (green)
             const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.02), eyeM);
             eyeL.position.set(-0.08, 1.37, 0.22);
             g.add(eyeL);
@@ -788,28 +762,23 @@
             eyeR.position.set(0.08, 1.37, 0.22);
             g.add(eyeR);
 
-            // Nose
             const nose = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.04, 0.06), new THREE.MeshStandardMaterial({ color: 0xe88a5a }));
             nose.position.set(0, 1.33, 0.24);
             g.add(nose);
 
-            // Mouth
             const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.02, 0.02), new THREE.MeshStandardMaterial({ color: 0x5a3a2a }));
             mouth.position.set(0, 1.27, 0.22);
             g.add(mouth);
 
-            // Body (green shirt)
             const body = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.48, 0.22), shirtM);
             body.position.set(0, 0.92, 0);
             body.castShadow = true;
             g.add(body);
 
-            // Belt (dark green)
             const belt = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.04, 0.24), new THREE.MeshStandardMaterial({ color: 0x1a3a1a }));
             belt.position.set(0, 0.68, 0);
             g.add(belt);
 
-            // Arms (thinner — Alex's 3px arms)
             leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.46, 0.1), shirtM);
             leftArm.position.set(-0.28, 0.92, 0);
             leftArm.castShadow = true;
@@ -819,7 +788,6 @@
             rightArm.castShadow = true;
             g.add(rightArm);
 
-            // Hands (skin)
             const lHand = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.1, 0.08), skinM);
             lHand.position.set(-0.28, 0.69, 0);
             g.add(lHand);
@@ -827,7 +795,6 @@
             rHand.position.set(0.28, 0.69, 0);
             g.add(rHand);
 
-            // Legs (dark green)
             leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.44, 0.18), pantsM);
             leftLeg.position.set(-0.1, 0.34, 0);
             leftLeg.castShadow = true;
@@ -837,7 +804,6 @@
             rightLeg.castShadow = true;
             g.add(rightLeg);
 
-            // Shoes
             const lShoe = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.08, 0.24), shoeM);
             lShoe.position.set(-0.1, 0.1, 0.02);
             g.add(lShoe);
@@ -852,18 +818,15 @@
             const blackM = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
             const eyeM = new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.5 });
 
-            // Head
             const head = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.44, 0.44), bodyM);
             head.position.set(0, 1.25, 0);
             head.castShadow = true;
             g.add(head);
 
-            // Dark spots on top of head
             const hSpot = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.02, 0.08), darkM);
             hSpot.position.set(-0.08, 1.47, 0.06);
             g.add(hSpot);
 
-            // Eyes (black pixels)
             const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.02), eyeM);
             eyeL.position.set(-0.08, 1.27, 0.23);
             g.add(eyeL);
@@ -871,7 +834,6 @@
             eyeR.position.set(0.08, 1.27, 0.23);
             g.add(eyeR);
 
-            // Mouth (frown)
             const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.03, 0.02), eyeM);
             mouth.position.set(0, 1.19, 0.23);
             g.add(mouth);
@@ -882,20 +844,17 @@
             frR.position.set(0.1, 1.17, 0.23);
             g.add(frR);
 
-            // Body (narrower than head)
             const body = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.56, 0.24), bodyM);
             body.position.set(0, 0.72, 0);
             body.castShadow = true;
             g.add(body);
 
-            // Creeper spots (dark green + black)
             const spotDefs = [[0.1,0.84,0.13,0.08,0.06],[0.16,0.7,0.13,0.06,0.1],[-0.14,0.78,0.13,0.1,0.06],[-0.08,0.62,0.13,0.06,0.06],[0.0,0.88,0.13,0.06,0.04]];
             for (const [sx, sy, sz, sw, sh] of spotDefs) {
                 const s = new THREE.Mesh(new THREE.BoxGeometry(sw, sh, 0.02), Math.random() < 0.5 ? darkM : blackM);
                 s.position.set(sx, sy, sz);
                 g.add(s);
             }
-            // Spots on sides and back
             const sideSpots = [[0.16,0.76,0.06,0.08],[-0.16,0.68,0.06,0.06],[0.0,0.72,-0.12,0.12,0.06],[0.12,0.64,-0.12,0.06,0.08]];
             for (const [sx, sy, sz, sw, sh] of sideSpots) {
                 const s = new THREE.Mesh(new THREE.BoxGeometry(sw, sh, 0.02), Math.random() < 0.5 ? darkM : blackM);
@@ -903,7 +862,6 @@
                 g.add(s);
             }
 
-            // 4 legs (connected to body)
             const legData = [[-0.14, -0.14], [0.14, -0.14], [-0.14, 0.14], [0.14, 0.14]];
             const legMeshes = [];
             for (const [lx, lz] of legData) {
@@ -912,18 +870,15 @@
                 leg.castShadow = true;
                 g.add(leg);
                 legMeshes.push(leg);
-                // Foot
                 const foot = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.06, 0.24), bodyM);
                 foot.position.set(lx, 0.17, lz);
                 g.add(foot);
             }
 
-            // Assign all 4 legs for animation
-            leftLeg = legMeshes[0];  // front-left
-            rightLeg = legMeshes[1]; // front-right
-            leftBackLeg = legMeshes[2]; // back-left
-            rightBackLeg = legMeshes[3]; // back-right
-            // Invisible arms so animation check passes
+            leftLeg = legMeshes[0];
+            rightLeg = legMeshes[1];
+            leftBackLeg = legMeshes[2];
+            rightBackLeg = legMeshes[3];
             leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.01,0.01,0.01));
             rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.01,0.01,0.01));
             leftArm.visible = false;
@@ -937,13 +892,11 @@
             const darkM = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 });
             const eyeM = new THREE.MeshStandardMaterial({ color: 0xaa33ff, emissive: 0x8822dd, emissiveIntensity: 0.6 });
 
-            // Head
             const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), bodyM);
             head.position.set(0, 1.75, 0);
             head.castShadow = true;
             g.add(head);
 
-            // Eyes (purple glow)
             const eL = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.02), eyeM);
             eL.position.set(-0.09, 1.77, 0.21);
             g.add(eL);
@@ -951,13 +904,11 @@
             eR.position.set(0.09, 1.77, 0.21);
             g.add(eR);
 
-            // Body (tall)
             const body = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.5, 0.22), bodyM);
             body.position.set(0, 1.2, 0);
             body.castShadow = true;
             g.add(body);
 
-            // Arms (long)
             leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.6, 0.14), bodyM);
             leftArm.position.set(-0.28, 1.2, 0);
             leftArm.castShadow = true;
@@ -966,7 +917,6 @@
             rightArm.position.set(0.28, 1.2, 0);
             rightArm.castShadow = true;
             g.add(rightArm);
-            // Hands (slightly wider)
             const lHand = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.08, 0.1), darkM);
             lHand.position.set(-0.28, 0.9, 0);
             g.add(lHand);
@@ -974,7 +924,6 @@
             rHand.position.set(0.28, 0.9, 0);
             g.add(rHand);
 
-            // Legs (very long)
             leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.0, 0.16), bodyM);
             leftLeg.position.set(-0.1, 0.55, 0);
             leftLeg.castShadow = true;
@@ -983,7 +932,6 @@
             rightLeg.position.set(0.1, 0.55, 0);
             rightLeg.castShadow = true;
             g.add(rightLeg);
-            // Feet
             const foot = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.06, 0.24), darkM);
             foot.position.set(-0.1, 0.03, 0.02);
             g.add(foot);
@@ -991,7 +939,6 @@
             foot2.position.set(0.1, 0.03, 0.02);
             g.add(foot2);
 
-            // Particles (small floating purple dots around head — like Enderman's teleport effect)
             const partM = new THREE.MeshStandardMaterial({ color: 0x9933ff, emissive: 0x7711cc, emissiveIntensity: 0.3, transparent: true, opacity: 0.6 });
             for (let i = 0; i < 6; i++) {
                 const angle = (i / 6) * Math.PI * 2;
@@ -1001,7 +948,6 @@
             }
         }
 
-        // Equipment item (held in hand)
         function buildPickaxe(g) {
             const matWood = new THREE.MeshStandardMaterial({ color: 0x6b3f1f, roughness: 0.8 });
             const matStone = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.6 });
@@ -1031,9 +977,17 @@
             steve: { name: 'Стив', emoji: '🧑', color: '#5a8a3c', price: 0, build: (g) => { buildSteve(g); buildPickaxe(g); } },
             alex: { name: 'Алекс', emoji: '👩', color: '#c99a5a', price: 100, build: (g) => { buildAlex(g); buildSword(g); } },
             creeper: { name: 'Крипер', emoji: '💚', color: '#3a7a3a', price: 200, build: (g) => { buildCreeper(g); } },
-            enderman: { name: 'Эндермен', emoji: '👾', color: '#1a1a2a', price: 350, build: (g) => { buildEnderman(g); } }
+            enderman: { name: 'Эндермен', emoji: '👾', color: '#1a1a2a', price: 350, build: (g) => { buildEnderman(g); } },
+            steve_gltf: { name: 'Стив GLTF', emoji: '📦', color: '#d4a56a', price: 150, build: (g) => {
+                const m = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), new THREE.MeshStandardMaterial({ color: 0x888888 }));
+                m.position.y = 0.5;
+                g.add(m);
+                const label = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.01, 0.01));
+                g.add(label);
+                leftArm = rightArm = label; leftLeg = rightLeg = label;
+            } }
         };
-        const CHAR_ORDER = ['steve', 'alex', 'creeper', 'enderman'];
+        const CHAR_ORDER = ['steve', 'alex', 'creeper', 'enderman', 'steve_gltf'];
 
         let currentChar = localStorage.getItem('mc_char') || 'steve';
         if (!CHARACTERS[currentChar]) currentChar = 'steve';
@@ -1057,13 +1011,31 @@
         function buildPlayer() {
             while(playerGroup.children.length > 0) playerGroup.remove(playerGroup.children[0]);
             leftArm = rightArm = leftLeg = rightLeg = leftBackLeg = rightBackLeg = leftLegKnee = rightLegKnee = leftArmElbow = rightArmElbow = leftShoulder = rightShoulder = null;
-            CHARACTERS[currentChar].build(playerGroup);
+
+            const charId = currentChar;
+            if (modelCache[charId]) {
+                const model = modelCache[charId].clone();
+                model.scale.set(0.6, 0.6, 0.6);
+                model.position.y = -0.4;
+                playerGroup.add(model);
+                leftArm = rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.01,0.01,0.01));
+                leftLeg = rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.01,0.01,0.01));
+                leftArm.visible = false; rightArm.visible = false;
+                leftLeg.visible = false; rightLeg.visible = false;
+                playerGroup.add(leftArm); playerGroup.add(rightArm);
+                playerGroup.add(leftLeg); playerGroup.add(rightLeg);
+            } else {
+                CHARACTERS[charId].build(playerGroup);
+                if (!modelCache[charId] && !loadingModels[charId]) {
+                    loadCharacterModel(charId, () => { buildPlayer(); });
+                }
+            }
             playerGroup.position.set(0, -0.2, 2.8);
         }
         let leftArm, rightArm, leftLeg, rightLeg, leftBackLeg, rightBackLeg, leftLegKnee, rightLegKnee, leftArmElbow, rightArmElbow, leftShoulder, rightShoulder;
         buildPlayer();
+        loadCharacterModel('steve_gltf');
 
-        // ===== MENU / SHOP =====
         function refreshShop() {
             const grid = document.getElementById('charGrid');
             grid.innerHTML = '';
@@ -1164,22 +1136,18 @@
         document.getElementById('menuSelectedChar').textContent = CHARACTERS[currentChar].name;
         updateCoinDisplay();
 
-        // ===== LANE POSITIONS =====
         const railPositions = [-1.5, 0, 1.5];
 
-        // ===== DIAMONDS (coins) =====
         function createFishCoin(lane, zPos) {
             const g = new THREE.Group();
             const diamondMat = new THREE.MeshStandardMaterial({ color: 0x44ddff, emissive: 0x22ccff, emissiveIntensity: 0.4 });
             const lightMat = new THREE.MeshStandardMaterial({ color: 0x88eeff, emissive: 0x66ddff, emissiveIntensity: 0.3 });
             const glowMat = new THREE.MeshStandardMaterial({ color: 0x66eeff, emissive: 0x44ddff, emissiveIntensity: 0.15, transparent: true, opacity: 0.15 });
 
-            // Diamond block body
             const body = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.14), diamondMat);
             body.position.y = 0.3;
             g.add(body);
 
-            // Diamond highlight pattern (like Minecraft block of diamond)
             const half = 0.07;
             const hl = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.02), lightMat);
             hl.position.set(0, 0.3, half);
@@ -1194,7 +1162,6 @@
             hl4.position.set(0, 0.23, 0);
             g.add(hl4);
 
-            // Glow aura
             const glow = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.26, 0.26), glowMat);
             glow.position.y = 0.3;
             g.add(glow);
@@ -1211,13 +1178,11 @@
             fishCoins.push({ mesh: createFishCoin(lane, -24), lane, z: -24, collected: false });
         }
 
-        // ===== MINECRAFT OBSTACLES =====
         function createObstacle(lane, zPos) {
             const g = new THREE.Group();
             const type = Math.random();
             
             if (type < 0.4) {
-                // CACTUS - tall, 3 blocks stacked (×1.5)
                 const cactusMat = new THREE.MeshStandardMaterial({ color: 0x3a8a3a, roughness: 0.8 });
                 const base = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.45, 0.45), cactusMat);
                 base.position.y = 0.225;
@@ -1228,7 +1193,6 @@
                 const top = new THREE.Mesh(new THREE.BoxGeometry(0.39, 0.45, 0.39), cactusMat);
                 top.position.y = 1.125;
                 g.add(top);
-                // Arms
                 const armL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.22, 0.12), cactusMat);
                 armL.position.set(-0.3, 0.9, 0);
                 g.add(armL);
@@ -1237,7 +1201,6 @@
                 g.add(armR);
                 g.userData.isCactus = true;
             } else if (type < 0.7) {
-                // LAVA BLOCK - glowing orange block
                 const lavaMat = new THREE.MeshStandardMaterial({ color: 0xff4400, emissive: 0xff2200, emissiveIntensity: 0.7 });
                 const block = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), lavaMat);
                 block.position.y = 0.2;
@@ -1245,7 +1208,6 @@
                 const glow = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), new THREE.MeshStandardMaterial({ color: 0xff6600, emissive: 0xff4400, emissiveIntensity: 0.3, transparent: true, opacity: 0.2 }));
                 glow.position.y = 0.2;
                 g.add(glow);
-                // Hot particles on top (little boxes)
                 for (let i = 0; i < 4; i++) {
                     const p = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.03, 0.04), new THREE.MeshStandardMaterial({ color: 0xffaa00, emissive: 0xff8800, emissiveIntensity: 0.6 }));
                     p.position.set((Math.random()-0.5)*0.2, 0.45 + Math.random()*0.15, (Math.random()-0.5)*0.2);
@@ -1253,17 +1215,14 @@
                 }
                 g.userData.isLava = true;
             } else {
-                // FENCE — Minecraft-style, width of one lane
                 const fenceMat = new THREE.MeshStandardMaterial({ color: 0x8b6b3c, roughness: 0.9 });
                 const fenceW = 0.9;
-                // Posts (thick like Minecraft)
                 const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.5, 0.12), fenceMat);
                 post.position.set(-fenceW/2, 0.25, 0);
                 g.add(post);
                 const post2 = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.5, 0.12), fenceMat);
                 post2.position.set(fenceW/2, 0.25, 0);
                 g.add(post2);
-                // Horizontal bars (thick)
                 const bar1 = new THREE.Mesh(new THREE.BoxGeometry(fenceW, 0.1, 0.1), fenceMat);
                 bar1.position.set(0, 0.35, 0);
                 g.add(bar1);
@@ -1281,7 +1240,7 @@
 
         function updatePlayerPosition() {
             const targetX = railPositions[targetLane];
-            playerGroup.position.x += (targetX - playerGroup.position.x) * 0.13;
+            playerGroup.position.x += (targetX - playerGroup.position.x) * 0.15;
         }
 
         function spawnObstacle() {
@@ -1289,19 +1248,18 @@
             obstacles.push({ mesh: createObstacle(Math.floor(Math.random()*3), -24), lane: Math.floor(Math.random()*3), z: -24 });
         }
 
-        // ===== INPUT =====
+        function handleLane(dir) { targetLane = Math.max(0, Math.min(2, targetLane + dir)); }
         window.addEventListener('keydown', (e) => {
             if (!gameRunning) return;
-            if (e.key === 'ArrowLeft') { targetLane = Math.max(0, targetLane-1); e.preventDefault(); }
-            else if (e.key === 'ArrowRight') { targetLane = Math.min(2, targetLane+1); e.preventDefault(); }
-            else if (e.key === 'ArrowUp' && !isJumping && !isSliding) { isJumping = true; jumpVelocity = 0.28; e.preventDefault(); }
-            else if (e.key === 'ArrowDown' && !isSliding && !isJumping) { isSliding = true; playerGroup.scale.y = 0.5; e.preventDefault(); }
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') { handleLane(-1); e.preventDefault(); }
+            else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') { handleLane(1); e.preventDefault(); }
+            else if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') { if (!isJumping && !isSliding) { isJumping = true; jumpVelocity = 0.45; } e.preventDefault(); }
+            else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') { if (!isSliding && !isJumping) { isSliding = true; playerGroup.scale.y = 0.5; } e.preventDefault(); }
         });
         window.addEventListener('keyup', (e) => {
-            if (e.key === 'ArrowDown' && isSliding) { isSliding = false; playerGroup.scale.y = 1; }
+            if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') { isSliding = false; playerGroup.scale.y = 1; }
         });
 
-        // ===== ANIMATION =====
         function animate() {
             if (!gameRunning) {
                 renderer.render(scene, camera);
@@ -1350,13 +1308,10 @@
                 const dz = Math.abs(playerGroup.position.z - obstacles[i].z);
                 let hit = false;
                 if (obstacles[i].mesh.userData.isCactus) {
-                    // Cactus: tall, can't jump over, need to dodge
                     hit = dx < 0.5 && dz < 0.7;
                 } else if (obstacles[i].mesh.userData.isLava) {
-                    // Lava: can jump over
                     hit = dx < 0.5 && dz < 0.7 && !isJumping && !isSliding;
                 } else if (obstacles[i].mesh.userData.isFence) {
-                    // Fence: can jump over
                     hit = dx < 0.6 && dz < 0.6 && !isJumping && !isSliding;
                 }
                 if (hit) {
@@ -1398,7 +1353,6 @@
             fishSpawnCounter++;
             if (fishSpawnCounter > 15 + Math.floor(Math.random()*20)) { spawnFishCoin(); fishSpawnCounter = 0; }
 
-            // Scroll decorations
             for (let i = 0; i < decorations.length; i++) {
                 decorations[i].z += scrollSpeed;
                 decorations[i].mesh.position.z = decorations[i].z;
@@ -1408,10 +1362,8 @@
                     i--;
                 }
             }
-            // Spawn new decorations to fill ahead
             if (decorations.length < 22) spawnDecoration();
 
-            // Scroll background (2D canvas)
             bgOffset += scrollSpeed * 0.5;
             drawBackground(bgOffset);
 
